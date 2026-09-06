@@ -4,10 +4,10 @@ import { getStatusColor } from '../../utils/stationHealth';
 
 export default function SatelliteRadome3D({ asset, radius = 1.8 }) {
   const dishGroupRef = useRef();
-  const statusColor = getStatusColor(asset.status);
+  const statusColor = getStatusColor(asset?.status || 'healthy');
 
   useFrame(({ clock }) => {
-    if (dishGroupRef.current && asset.status !== 'offline') {
+    if (dishGroupRef.current && asset?.status !== 'offline') {
       const t = clock.getElapsedTime();
       // Slow tracking sweep in azimuth and slight elevation nod
       dishGroupRef.current.rotation.y = Math.sin(t * 0.25) * 0.8 + 0.4;

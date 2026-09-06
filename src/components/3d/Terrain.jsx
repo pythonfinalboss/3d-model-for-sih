@@ -1,56 +1,118 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 
 export default function Terrain({ stationId }) {
-  // Generate low-poly stylized snow terrain with subtle topography
+  const lakeRingRef = useRef();
+
+  // Generate low-poly stylized snow terrain with rich topographic elevation gradients
   const terrainGeo = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(120, 120, 48, 48);
+    const geo = new THREE.PlaneGeometry(150, 150, 64, 64);
     const pos = geo.attributes.position;
-    
+    const colors = new Float32Array(pos.count * 3);
+
+    // Color definitions for terrain gradient
+    const colLakeBed = new THREE.Color('#0369a1');      // Deep glacial water cyan
+    const colLakeShore = new THREE.Color('#38bdf8');    // Frosted shoreline ice
+    const colStationPad = new THREE.Color('#1e293b');   // Hardpack dark gravel/moraine pad
+    const colStationEdge = new THREE.Color('#334155');  // Pad rim
+    const colSnowLow = new THREE.Color('#93c5fd');      // Blue ice drift
+    const colSnowMid = new THREE.Color('#e0f2fe');      // Crisp sunlit snow
+    const colSnowPeak = new THREE.Color('#ffffff');     // Glacial ridge peak highlight
+
+    const tempCol = new THREE.Color();
+
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
-      const y = pos.getY(i);
-      
-      // Calculate distance from center station pad
-      const dist = Math.sqrt(x * x + y * y);
-      
-      // Keep center station area relatively flat for buildings
+      const y = pos.getY(i); // In 3D plane geometry before rotation, Y is the Z axis
+
       let elevation = 0;
-      if (dist > 18) {
-        elevation = Math.sin(x * 0.08) * Math.cos(y * 0.08) * 3.5 + 
-                    Math.sin(x * 0.15 + y * 0.12) * 1.5;
-        // Raise perimeter snow hills
-        if (dist > 35) {
-          elevation += Math.pow((dist - 35) * 0.18, 1.4);
+      let colorType = 'snow';
+
+      if (stationId === 'maitri') {
+        // Maitri Station pad: from x = -32 to +32, y = -14 to +25
+        const inStationPad = Math.abs(x) < 30 && y > -13 && y < 24;
+
+        if (inStationPad) {
+          elevation = 0;
+          colorType = 'pad';
+        } else if (y <= -13) {
+          // Northern depression for Lake Priyadarshini basin
+          const lakeDepth = Math.min(2.2, Math.abs(y + 13) * 0.22);
+          elevation = -lakeDepth;
+          colorType = 'lake';
+        } else {
+          // Perimeter glacial moraine hills and snow drifts
+          const dist = Math.sqrt(x * x + y * y);
+          if (dist > 30) {
+            elevation = Math.sin(x * 0.08) * Math.cos(y * 0.08) * 3.5 +
+                        Math.sin(x * 0.16 + y * 0.12) * 1.6;
+            if (dist > 45) {
+              elevation += Math.pow((dist - 45) * 0.18, 1.45);
+            }
+          }
+          colorType = 'snow';
+        }
+      } else if (stationId === 'bharati') {
+        // Bharati: Coastal sea ice drop-off on negative Y side (Prydz Bay)
+        if (y < -18) {
+          elevation = -2.6 + Math.sin(x * 0.1) * 0.4;
+          colorType = 'ocean';
+        } else {
+          const dist = Math.sqrt(x * x + y * y);
+          if (dist > 22) {
+            elevation = Math.sin(x * 0.08) * Math.cos(y * 0.08) * 2.8;
+          }
+          colorType = 'snow';
         }
       } else {
-        // Slight natural undulation under station
-        elevation = Math.sin(x * 0.2) * Math.cos(y * 0.2) * 0.3;
-      }
-
-      // Maitri: Lake Priyadarshini depression in positive quadrant
-      if (stationId === 'maitri' && x > 8 && x < 28 && y > 6 && y < 26) {
-        const lakeDist = Math.sqrt(Math.pow(x - 18, 2) + Math.pow(y - 16, 2));
-        if (lakeDist < 9) {
-          elevation = -1.2 + Math.cos((lakeDist / 9) * Math.PI) * 0.5;
+        const dist = Math.sqrt(x * x + y * y);
+        if (dist > 20) {
+          elevation = Math.sin(x * 0.08) * Math.cos(y * 0.08) * 2.2;
         }
-      }
-
-      // Bharati: Coastal sea ice drop-off on negative Z side
-      if (stationId === 'bharati' && y < -20) {
-        elevation = -2.5 + Math.sin(x * 0.1) * 0.4;
+        colorType = 'snow';
       }
 
       pos.setZ(i, elevation);
+
+      // Compute smooth multi-tonal gradient color based on elevation & feature type
+      if (colorType === 'pad') {
+        const distFromCenter = Math.hypot(x, y - 5) / 30;
+        tempCol.copy(colStationPad).lerp(colStationEdge, Math.min(1, distFromCenter));
+      } else if (colorType === 'lake' || colorType === 'ocean') {
+        const depthT = Math.min(1, Math.abs(elevation) / 2.0);
+        tempCol.copy(colLakeShore).lerp(colLakeBed, depthT);
+      } else {
+        // Snow elevation gradient: Low icy blue -> mid frost -> high radiant white
+        if (elevation <= 0.8) {
+          tempCol.copy(colSnowLow).lerp(colSnowMid, Math.max(0, elevation / 0.8));
+        } else {
+          const highT = Math.min(1, (elevation - 0.8) / 4.0);
+          tempCol.copy(colSnowMid).lerp(colSnowPeak, highT);
+        }
+      }
+
+      colors[i * 3] = tempCol.r;
+      colors[i * 3 + 1] = tempCol.g;
+      colors[i * 3 + 2] = tempCol.b;
     }
 
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geo.computeVertexNormals();
     return geo;
   }, [stationId]);
 
+  // Subtle animated wave ripple for Lake Priyadarshini
+  useFrame(({ clock }) => {
+    if (lakeRingRef.current) {
+      const t = clock.getElapsedTime();
+      lakeRingRef.current.material.opacity = 0.4 + Math.sin(t * 1.5) * 0.15;
+    }
+  });
+
   return (
     <group>
-      {/* Main Stylized Antarctic Snow Surface */}
+      {/* 1. Main Gradient-Shaded Antarctic Snow & Moraine Surface */}
       <mesh
         geometry={terrainGeo}
         rotation={[-Math.PI / 2, 0, 0]}
@@ -58,73 +120,95 @@ export default function Terrain({ stationId }) {
         receiveShadow
       >
         <meshStandardMaterial
-          color="#dbeafe" // Ice-blue white
-          roughness={0.85}
-          metalness={0.1}
+          vertexColors={true}
+          roughness={0.75}
+          metalness={0.12}
           flatShading={true}
         />
       </mesh>
 
-      {/* Subtle Glowing Polar Grid lines & Compass Rings */}
+      {/* 2. Technical Cyber-Cad Polar Grid Overlay */}
       <gridHelper
-        args={[100, 50, '#38bdf8', '#1e293b']}
+        args={[130, 65, '#06b6d4', '#1e293b']}
         position={[0, 0.02, 0]}
       />
 
-      {/* Polar Coordinate Marker Rings */}
+      {/* 3. Concentric Station Distance Radar Circles */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
         <ringGeometry args={[18, 18.2, 64]} />
-        <meshBasicMaterial color="#0284c7" transparent opacity={0.4} />
+        <meshBasicMaterial color="#06b6d4" transparent opacity={0.4} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
-        <ringGeometry args={[32, 32.2, 64]} />
-        <meshBasicMaterial color="#0369a1" transparent opacity={0.25} />
+        <ringGeometry args={[32, 32.25, 64]} />
+        <meshBasicMaterial color="#0284c7" transparent opacity={0.3} />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+        <ringGeometry args={[48, 48.3, 64]} />
+        <meshBasicMaterial color="#0369a1" transparent opacity={0.2} />
       </mesh>
 
-      {/* MAITRI SPECIFIC: Lake Priyadarshini Frozen Water Mesh */}
+      {/* 4. MAITRI SPECIFIC: Lake Priyadarshini Glacial Lake with Deep Cyan Gradient & Caustics */}
       {stationId === 'maitri' && (
-        <group position={[18, -0.6, 16]}>
-          {/* Deep blue frozen glacial ice */}
+        <group position={[0, -0.28, -22]}>
+          {/* Deep Glacial Lake Bed */}
           <mesh rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[8.5, 32]} />
+            <planeGeometry args={[100, 24]} />
             <meshStandardMaterial
               color="#0284c7"
+              emissive="#0369a1"
+              emissiveIntensity={0.35}
               roughness={0.1}
-              metalness={0.8}
+              metalness={0.9}
               transparent
               opacity={0.88}
             />
           </mesh>
-          {/* Ice cracks and water intake glow */}
-          <pointLight color="#38bdf8" intensity={1.5} distance={12} position={[0, 1, 0]} />
+
+          {/* Shoreline Ice Shelf Gradient Ribbon */}
+          <mesh
+            ref={lakeRingRef}
+            rotation={[-Math.PI / 2, 0, 0]}
+            position={[0, 0.04, 0]}
+          >
+            <ringGeometry args={[20, 24, 32]} />
+            <meshBasicMaterial
+              color="#38bdf8"
+              transparent
+              opacity={0.45}
+            />
+          </mesh>
+
+          {/* Cyan Subsurface Glacial Glow */}
+          <pointLight color="#06b6d4" intensity={2.2} distance={25} position={[0, 1.8, 0]} />
         </group>
       )}
 
-      {/* BHARATI SPECIFIC: Coastal Prydz Bay Ocean & Pack Ice Chunks */}
+      {/* 5. BHARATI SPECIFIC: Coastal Prydz Bay Ocean & Floating Pack Ice Chunks */}
       {stationId === 'bharati' && (
         <group position={[0, -2.4, -34]}>
-          {/* Antarctic Ocean */}
           <mesh rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[110, 30]} />
+            <planeGeometry args={[120, 32]} />
             <meshStandardMaterial
-              color="#032b4b"
-              roughness={0.2}
-              metalness={0.6}
+              color="#022c4d"
+              emissive="#0369a1"
+              emissiveIntensity={0.3}
+              roughness={0.15}
+              metalness={0.7}
               transparent
-              opacity={0.92}
+              opacity={0.94}
             />
           </mesh>
-          {/* Floating pack ice blocks */}
-          {[-25, -12, 0, 14, 28].map((px, idx) => (
+          {[-30, -15, 0, 16, 32].map((px, idx) => (
             <mesh
               key={idx}
-              position={[px + Math.sin(idx) * 3, 0.2, Math.cos(idx) * 4]}
+              position={[px + Math.sin(idx) * 3, 0.25, Math.cos(idx) * 4]}
               rotation={[0, idx * 0.7, 0]}
             >
-              <boxGeometry args={[4 + idx * 0.5, 0.6, 3 + (idx % 3)]} />
-              <meshStandardMaterial color="#e0f2fe" roughness={0.7} />
+              <boxGeometry args={[4.5 + idx * 0.5, 0.6, 3.5 + (idx % 3)]} />
+              <meshStandardMaterial color="#e0f2fe" roughness={0.6} />
             </mesh>
           ))}
+          <pointLight color="#38bdf8" intensity={1.8} distance={30} position={[0, 2, 0]} />
         </group>
       )}
     </group>

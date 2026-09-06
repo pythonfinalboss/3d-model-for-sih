@@ -17,14 +17,21 @@ export default function CameraController() {
 
   // Update target coordinates when station, asset, or preset changes
   useEffect(() => {
-    if (selectedAsset) {
+    if (
+      selectedAsset &&
+      Array.isArray(selectedAsset.position) &&
+      selectedAsset.position.length >= 3 &&
+      !isNaN(selectedAsset.position[0]) &&
+      !isNaN(selectedAsset.position[1]) &&
+      !isNaN(selectedAsset.position[2])
+    ) {
       // Focus on specific asset
       const [ax, ay, az] = selectedAsset.position;
       
       // If we are in combined view, add station offset
       let stationOffsetX = 0;
       let stationOffsetZ = 0;
-      if (selectedStation === 'combined') {
+      if (selectedStation === 'combined' || selectedStation === 'overview') {
         if (selectedAsset.stationId === 'maitri') {
           stationOffsetX = -35;
           stationOffsetZ = -5;
@@ -46,6 +53,22 @@ export default function CameraController() {
       const [tx, ty, tz] = meta.topDownCamera ? meta.topDownCamera.position : [0, 50, 0.1];
       targetCamPos.current.set(tx, ty, tz);
       targetLookAt.current.set(0, 0, 0);
+      isTransitioning.current = true;
+    } else if (cameraPreset === 'helipad') {
+      targetCamPos.current.set(24, 12, 12);
+      targetLookAt.current.set(16, 1.5, 4);
+      isTransitioning.current = true;
+    } else if (cameraPreset === 'workshop') {
+      targetCamPos.current.set(-24, 10, 16);
+      targetLookAt.current.set(-16, 2, 8);
+      isTransitioning.current = true;
+    } else if (cameraPreset === 'fuelfarm') {
+      targetCamPos.current.set(-24, 10, -16);
+      targetLookAt.current.set(-16, 1.5, -10);
+      isTransitioning.current = true;
+    } else if (cameraPreset === 'hub') {
+      targetCamPos.current.set(12, 14, 16);
+      targetLookAt.current.set(0, 2, 0);
       isTransitioning.current = true;
     } else {
       // Station level default camera

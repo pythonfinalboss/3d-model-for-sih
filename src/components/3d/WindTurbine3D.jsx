@@ -6,13 +6,13 @@ import { getStatusColor } from '../../utils/stationHealth';
 export default function WindTurbine3D({ asset, height = 7, bladeRadius = 2.8 }) {
   const rotorRef = useRef();
   const { weather, selectedStation } = useStationData();
-  const statusColor = getStatusColor(asset.status);
+  const statusColor = getStatusColor(asset?.status || 'healthy');
 
-  const st = asset.stationId || (selectedStation === 'combined' ? 'maitri' : selectedStation);
-  const windSpeed = weather[st]?.windSpeed || 40;
+  const st = asset?.stationId || (selectedStation === 'combined' ? 'maitri' : selectedStation);
+  const windSpeed = weather?.[st]?.windSpeed || 40;
 
   useFrame((_, delta) => {
-    if (rotorRef.current && asset.status !== 'offline') {
+    if (rotorRef.current && asset?.status !== 'offline') {
       // Rotation speed in radians/sec based on wind speed
       const rotSpeed = (windSpeed / 12) * 1.5;
       rotorRef.current.rotation.z += rotSpeed * delta;

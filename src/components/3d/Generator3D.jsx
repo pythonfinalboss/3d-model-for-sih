@@ -5,16 +5,16 @@ import { getStatusColor } from '../../utils/stationHealth';
 export default function Generator3D({ asset, isCogen = false }) {
   const containerRef = useRef();
   const exhaustLightRef = useRef();
-  const statusColor = getStatusColor(asset.status);
+  const statusColor = getStatusColor(asset?.status || 'healthy');
 
-  const isRunning = asset.status !== 'offline';
-  const isHighLoad = asset.load > 75 || asset.status === 'warning' || asset.status === 'critical';
+  const isRunning = asset?.status !== 'offline';
+  const isHighLoad = (asset?.load || 50) > 75 || asset?.status === 'warning' || asset?.status === 'critical';
 
   useFrame(({ clock }) => {
     if (containerRef.current && isRunning) {
       const t = clock.getElapsedTime() * 45;
       // Subtle physical micro-vibration of engine block
-      const vib = (isHighLoad ? 0.03 : 0.01) * (asset.load / 100);
+      const vib = (isHighLoad ? 0.03 : 0.01) * ((asset?.load || 50) / 100);
       containerRef.current.position.y = 0.8 + Math.sin(t) * vib;
       containerRef.current.position.x = Math.cos(t * 1.3) * (vib * 0.5);
     }
@@ -22,7 +22,7 @@ export default function Generator3D({ asset, isCogen = false }) {
     if (exhaustLightRef.current && isRunning) {
       // Heat shimmer light pulse
       const pulse = 1 + Math.sin(clock.getElapsedTime() * 8) * 0.3;
-      exhaustLightRef.current.intensity = (asset.temperature > 85 ? 2.5 : 1.2) * pulse;
+      exhaustLightRef.current.intensity = ((asset?.temperature || 20) > 85 ? 2.5 : 1.2) * pulse;
     }
   });
 

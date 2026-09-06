@@ -3,10 +3,32 @@ import InteractiveAsset3D from './InteractiveAsset3D';
 import WindTurbine3D from './WindTurbine3D';
 import SatelliteRadome3D from './SatelliteRadome3D';
 import Generator3D from './Generator3D';
+import { useStationData } from '../../context/StationDataContext';
 import { getStatusColor } from '../../utils/stationHealth';
 
 export default function BharatiStation3D({ assets }) {
-  const getAsset = (id) => assets.find((a) => a.id === id) || { id, status: 'healthy', name: id };
+  const { telemetryBuildings = [] } = useStationData();
+  const getAsset = (id) => {
+    const normHyphen = id.replace(/_/g, '-');
+    const normUnderscore = id.replace(/-/g, '_');
+    const telemetryMatch = telemetryBuildings.find(
+      (b) =>
+        b.id === id ||
+        b.id === normUnderscore ||
+        b.id === normHyphen ||
+        b.id.includes(normUnderscore) ||
+        normUnderscore.includes(b.id)
+    );
+    const assetMatch = assets.find((a) => a.id === id || a.id === normHyphen || a.id === normUnderscore);
+    return {
+      ...(assetMatch || {}),
+      ...(telemetryMatch || {}),
+      id: telemetryMatch?.id || id,
+      name: telemetryMatch?.name || assetMatch?.name || id,
+      status: telemetryMatch?.status || assetMatch?.status || 'healthy',
+      telemetry: telemetryMatch?.telemetry || assetMatch?.metrics || {},
+    };
+  };
 
   const bharatiMain = getAsset('bharati-main');
   const bharatiOcean = getAsset('bharati-lab-ocean');

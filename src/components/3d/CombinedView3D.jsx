@@ -33,7 +33,7 @@ export default function CombinedView3D({ assets }) {
             <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
             MAITRI STATION (Schirmacher Oasis)
             <span className="text-xs px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
-              Health {maitriMetrics.healthScore}%
+              Health {maitriMetrics?.healthScore ?? 87}%
             </span>
           </button>
         </Html>
@@ -51,7 +51,7 @@ export default function CombinedView3D({ assets }) {
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
             BHARATI STATION (Larsemann Hills)
             <span className="text-xs px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 font-mono">
-              Health {bharatiMetrics.healthScore}%
+              Health {bharatiMetrics?.healthScore ?? 94}%
             </span>
           </button>
         </Html>
